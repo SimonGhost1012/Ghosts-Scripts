@@ -3,6 +3,7 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 while not player do
@@ -1926,6 +1927,14 @@ SettingsTab:Button({
 })
 
 local savedMouseState
+local MOUSE_FREE_BIND = "GhostScriptsMouseFree"
+local mouseGuardBound = false
+
+local function holdMouseFree()
+	UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+	UserInputService.MouseIconEnabled = true
+end
+
 local function unlockMouse()
 	if not savedMouseState then
 		savedMouseState = {
@@ -1933,11 +1942,26 @@ local function unlockMouse()
 			IconEnabled = UserInputService.MouseIconEnabled,
 		}
 	end
-	UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-	UserInputService.MouseIconEnabled = true
+	holdMouseFree()
+	-- First-person games re-lock the cursor on their own: CameraMode
+	-- LockFirstPerson, or a zoom of 0.5 in Classic mode, makes the engine put
+	-- MouseBehavior back to LockCenter within about a second (measured).
+	-- Re-asserting it as the very last render step frees the cursor without
+	-- touching the camera, its mode or the zoom range, so the view stays first
+	-- person and nothing zooms out.
+	if not mouseGuardBound then
+		mouseGuardBound = true
+		pcall(function()
+			RunService:BindToRenderStep(MOUSE_FREE_BIND, Enum.RenderPriority.Last.Value, holdMouseFree)
+		end)
+	end
 end
 
 local function restoreMouse()
+	if mouseGuardBound then
+		mouseGuardBound = false
+		pcall(function() RunService:UnbindFromRenderStep(MOUSE_FREE_BIND) end)
+	end
 	if not savedMouseState then return end
 	UserInputService.MouseBehavior = savedMouseState.Behavior
 	UserInputService.MouseIconEnabled = savedMouseState.IconEnabled
